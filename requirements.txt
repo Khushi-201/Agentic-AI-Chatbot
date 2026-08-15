@@ -1,0 +1,10 @@
+langgraph
+python-dotenv
+streamlit
+langchain
+langchain-google-genai
+requests
+pydantic
+langgraph-checkpoint-sqlite
+langchain-tavily
+tavily-python
