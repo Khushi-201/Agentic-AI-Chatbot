@@ -5,6 +5,9 @@ from langchain_core.messages import BaseMessage, HumanMessage, AIMessage
 from langchain_google_genai import ChatGoogleGenerativeAI
 from dotenv import load_dotenv
 from langgraph.checkpoint.memory import MemorySaver
+import sqlite3
+import uuid
+from langgraph.checkpoint.sqlite import SqliteSaver
 
 load_dotenv()  # Load environment variables from .env file
 
@@ -24,8 +27,8 @@ def chat_node(state: ChatState):
         "messages":[response]
     }
 
-
-checkpoint = MemorySaver()
+conn = sqlite3.connect(database="chatbot.db", check_same_thread=False)
+checkpoint = SqliteSaver(conn)
 graph =StateGraph(ChatState)
 
 graph.add_node('chat_node', chat_node)
@@ -43,9 +46,14 @@ chatbot = graph.compile(checkpointer=checkpoint)
 # response = chatbot.invoke(initial_state)
 # response["messages"][-1].content[0]["text"]
 
+def get_all_thread():
+    all_threads = set()
+    for ckpt in checkpoint.list(None):
+        all_threads.add(ckpt.config['configurable']['thread_id'])
+    return list(all_threads)
 
 if __name__ == "__main__":
-    thread_id = "1"
+    thread_id = str(uuid.uuid4()) 
     while True:
         user_message = input("User: ")
         if user_message.strip().lower() in ['exit', 'quit', 'bye']:

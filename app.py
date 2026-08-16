@@ -1,7 +1,8 @@
-from agentic_chatbot import chatbot
+from agentic_chatbot import chatbot, get_all_thread
 from langchain_core.messages import HumanMessage, BaseMessage, AIMessage
 import streamlit as st
 import uuid
+
 
 st.title("Agentic Chatbot With LangGraph") 
 
@@ -65,17 +66,12 @@ if 'thread_id' not in st.session_state:
     st.session_state['thread_id'] = generate_thread_id()
     
 if 'chat_threads' not in st.session_state:
-    st.session_state["chat_threads"] = []
+    st.session_state["chat_threads"] = get_all_thread()
     
 #After initializing the session state, add the current thread to the list of threads
 
 add_thread(st.session_state["thread_id"])
     
-# Need to show the previous conversations in the sidebar 
-    
-for message in st.session_state['message_history']:
-    with st.chat_message(message["role"]):
-        st.text(message["content"])
         
 # Display all coversations in thread in reverse order //new convo first
 for thread_id in st.session_state["chat_threads"][::-1]:
@@ -120,11 +116,21 @@ for thread_id in st.session_state["chat_threads"][::-1]:
         # rerun to desplay new loaded conversation
         st.rerun()
             
-            
+  # Need to show the previous conversations in the sidebar 
+    
+for message in st.session_state['message_history']:
+    with st.chat_message(message["role"]):
+        st.text(message["content"])          
 
 user_input = st.chat_input("Type your message here...")
 # thread_id = "1"
-config ={'configurable': {'thread_id': st.session_state["thread_id"]}}
+config = {
+        "configurable": {"thread_id": st.session_state["thread_id"]},
+        "metadata": {
+            "thread_id": st.session_state["thread_id"]
+        },
+        "run_name": "chat_trace",
+    }
 
 if user_input:
     st.session_state['message_history'].append({"role": "user", "content": user_input})
