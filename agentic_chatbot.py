@@ -8,10 +8,16 @@ from langgraph.checkpoint.memory import MemorySaver
 import sqlite3
 import uuid
 from langgraph.checkpoint.sqlite import SqliteSaver
+from langgraph.prebuilt import ToolNode, tools_condition
+from langchain_core.tools import tool
+from langchain_tavily import TavilySearch
+import math
+import requests
+from combined_tools import llm_with_tools, tools
 
 load_dotenv()  # Load environment variables from .env file
 
-llm = ChatGoogleGenerativeAI(model="gemini-3.5-flash")
+llm = ChatGoogleGenerativeAI(model="gemini-3.6-flash")
 
 from langgraph.graph.message import add_messages
 
@@ -22,19 +28,25 @@ class ChatState(TypedDict):
 def chat_node(state: ChatState):
     # take user query from state
     messages = state['messages']
-    response= llm.invoke(messages)
+    response= llm_with_tools.invoke(messages)
     return {
         "messages":[response]
     }
 
+
+# Nodes 2 - tool node
+tool_node = ToolNode(tools)
 conn = sqlite3.connect(database="chatbot.db", check_same_thread=False)
 checkpoint = SqliteSaver(conn)
+
 graph =StateGraph(ChatState)
 
 graph.add_node('chat_node', chat_node)
+graph.add_node('tools', tool_node)
 
 graph.add_edge(START, 'chat_node')
-graph.add_edge('chat_node', END)
+graph.add_conditional_edges("chat_node",tools_condition)
+graph.add_edge('tools', 'chat_node')
 
 chatbot = graph.compile(checkpointer=checkpoint)
 
