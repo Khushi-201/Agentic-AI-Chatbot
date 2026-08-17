@@ -15,7 +15,7 @@ from langchain_community.document_loaders import PyPDFLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_google_genai import GoogleGenerativeAIEmbeddings
 from langchain_community.vectorstores import FAISS
-from combined_tools import llm_with_tools, tools
+from tools.combined_tools import llm_with_tools, tools
 from langgraph.graph.message import add_messages
 
 load_dotenv()  # Load environment variables from .env file

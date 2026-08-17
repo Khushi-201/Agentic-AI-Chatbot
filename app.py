@@ -1,9 +1,9 @@
-from agentic_chatbot import chatbot, get_all_thread
+from agent.agentic_chatbot import chatbot, get_all_thread
 from langchain_core.messages import HumanMessage, BaseMessage, AIMessage
 import streamlit as st
 import uuid, os
 import tempfile
-from combined_tools import ingest_rag_document 
+from tools.combined_tools import ingest_rag_document 
 
 
 st.title("Agentic Chatbot With LangGraph") 
@@ -57,23 +57,6 @@ def load_conversations(thread_id):
 #Adding Sidebar for conversation threads
 st.sidebar.title("My Conversations")
 
-# --- Add this PDF upload block ---
-st.sidebar.divider()
-uploaded_pdf = st.sidebar.file_uploader("Upload a PDF for RAG", type=["pdf"])
-
-if uploaded_pdf is not None:
-    if st.sidebar.button("Ingest PDF"):
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp_file:
-            tmp_file.write(uploaded_pdf.read())
-            tmp_path = tmp_file.name
-
-        with st.sidebar.status("Processing PDF..."):
-            ingest_rag_document(tmp_path)
-
-        os.remove(tmp_path)
-        st.sidebar.success("PDF ingested! You can now ask questions about it.")
-st.sidebar.divider()
-# --- end block ---
 
 if st.sidebar.button("New Chat"):
     reset_chat()
@@ -88,7 +71,7 @@ if 'thread_id' not in st.session_state:
 if 'chat_threads' not in st.session_state:
     st.session_state["chat_threads"] = get_all_thread()
     
-#After initializing the session state, add the current thread to the list of threads
+# After initializing the session state, add the current thread to the list of threads
 
 add_thread(st.session_state["thread_id"])
     
@@ -142,7 +125,9 @@ for message in st.session_state['message_history']:
     with st.chat_message(message["role"]):
         st.text(message["content"])          
 
-user_input = st.chat_input("Type your message here...")
+user_input = st.chat_input("Type your message here...",
+                           accept_file = True,
+                           file_type=["pdf"],)
 # thread_id = "1"
 config = {
         "configurable": {"thread_id": st.session_state["thread_id"]},
@@ -153,24 +138,41 @@ config = {
     }
 
 if user_input:
-    st.session_state['message_history'].append({"role": "user", "content": user_input})
-    with st.chat_message('user'):
-        st.text(user_input)
+    prompt_text = user_input.text
+    uploaded_files = user_input["files"]
 
-    with st.chat_message('assistant'):
-        assistant_content = st.write_stream(
+    # If a PDF was attached, ingest it first
+    if uploaded_files:
+        for pdf_file in uploaded_files:
+            with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp_file:
+                tmp_file.write(pdf_file.read())
+                tmp_path = tmp_file.name
 
-            message_chunk.content[0]["text"]
+            with st.spinner(f"Processing {pdf_file.name}..."):
+                ingest_rag_document(tmp_path)
 
-            for message_chunk, metadata in chatbot.stream(
-                {"messages": [HumanMessage(content=user_input)]}, config=config, stream_mode="messages"
+            os.remove(tmp_path)
+        st.toast(f"{len(uploaded_files)} PDF(s) ingested — you can now ask about them.")
+
+    if prompt_text:                                              # only proceed to chat if there's text
+        st.session_state['message_history'].append({"role": "user", "content": prompt_text})
+        with st.chat_message('user'):
+            st.text(prompt_text)
+
+        with st.chat_message('assistant'):
+            assistant_content = st.write_stream(
+
+                message_chunk.content[0]["text"]
+
+                for message_chunk, metadata in chatbot.stream(
+                    {"messages": [HumanMessage(content=prompt_text)]}, config=config, stream_mode="messages"
+                )
+
+                if isinstance(message_chunk, AIMessage)
+                and message_chunk.content
+                and isinstance(message_chunk.content[0], dict)
+                and message_chunk.content[0].get("type") == "text"
+                and message_chunk.content[0].get("text")
             )
 
-            if isinstance(message_chunk, AIMessage)
-            and message_chunk.content                              # not empty
-            and isinstance(message_chunk.content[0], dict)          # is a dict block
-            and message_chunk.content[0].get("type") == "text"      # is a text block
-            and message_chunk.content[0].get("text")                # has non-empty text
-        )
-
-    st.session_state['message_history'].append({"role": "assistant", "content": assistant_content})
+        st.session_state['message_history'].append({"role": "assistant", "content": assistant_content})
