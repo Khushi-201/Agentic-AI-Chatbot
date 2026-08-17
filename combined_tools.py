@@ -1,29 +1,85 @@
 
-from langgraph.graph import StateGraph, START, END
-from typing import TypedDict, Annotated
-from langchain_core.messages import BaseMessage, HumanMessage, AIMessage
+from typing import Any
 from langchain_google_genai import ChatGoogleGenerativeAI
 from dotenv import load_dotenv
-from langgraph.checkpoint.memory import MemorySaver
-import sqlite3
-import uuid
-from langgraph.checkpoint.sqlite import SqliteSaver
-from langgraph.prebuilt import ToolNode, tools_condition
 from langchain_core.tools import tool
 from langchain_tavily import TavilySearch
 import math
 import requests
 import os
+from langchain_community.document_loaders import PyPDFLoader
+from langchain_text_splitters import RecursiveCharacterTextSplitter
+from langchain_google_genai import GoogleGenerativeAIEmbeddings
+from langchain_community.vectorstores import FAISS
 
 load_dotenv()
 
 llm = ChatGoogleGenerativeAI(model="gemini-3.6-flash")
+
+embeddings = GoogleGenerativeAIEmbeddings(model = "gemini-embedding-001")
+
+def ingest_rag_document(file_path):
+    DB_PATH = "faiss_db"
+    loader = PyPDFLoader(file_path)
+    docs = loader.load()
+    splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
+    chunks = splitter.split_documents(docs)
+    vector_store = FAISS.from_documents(chunks, embeddings)
+    vector_store.save_local(DB_PATH)
+    
+def get_retriever():
+    DB_PATH = "faiss_db"
+    vector_store = FAISS.load_local(
+            folder_path=DB_PATH,
+            embeddings=embeddings,
+            allow_dangerous_deserialization=True
+        )
+    
+    retriever = vector_store.as_retriever(
+        search_type="similarity",
+        search_kwargs={"k": 4}
+    )
+
+    return retriever
+    
 
 search_tool = TavilySearch(
     max_results=5,
     topic="general",
     search_depth="advanced"
 )
+
+@tool
+def rag_tool(query: str) -> str:
+    """
+    Retrieve relevant information from the PDF document.
+
+    Use this tool when the user asks factual or conceptual questions
+    that may be answered using the stored PDF documents.
+
+    Args:
+        query: The question or search query used to retrieve PDF content.
+    """
+    retriever = get_retriever()
+    documents = retriever.invoke(query)
+
+    if not documents:
+        return "No relevant information was found in the PDF."
+
+    formatted_documents = []
+
+    for index, document in enumerate(documents, start=1):
+        source = document.metadata.get("source", "Unknown source")
+        page = document.metadata.get("page", "Unknown page")
+
+        formatted_documents.append(
+            f"Document {index}\n"
+            f"Source: {source}\n"
+            f"Page: {page}\n"
+            f"Content: {document.page_content}"
+        )
+
+    return "\n\n".join(formatted_documents)
 
 @tool
 def calculator(expression: str)->str:
@@ -96,7 +152,7 @@ def get_current_weather(location: str) -> str:
         )
         geo_response.raise_for_status()
 
-        locations: list[dict[str, Any]] = geo_response.json()
+        locations: list[dict[str,Any]] = geo_response.json()
 
         if not locations:
             return f"Could not find the location: {location}"
@@ -181,7 +237,7 @@ def get_current_weather(location: str) -> str:
 
 
 # Make tool list
-tools = [search_tool,calculator, get_stock_price,get_current_weather]
+tools = [search_tool,calculator, get_stock_price,get_current_weather, rag_tool]
 
 # Make the LLM tool-aware
 llm_with_tools = llm.bind_tools(tools)

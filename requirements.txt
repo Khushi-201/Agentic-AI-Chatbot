@@ -8,3 +8,7 @@ pydantic
 langgraph-checkpoint-sqlite
 langchain-tavily
 tavily-python
+faiss-cpu
+langchain-community
+pypdf
+langchain-text-splitters

@@ -1,7 +1,9 @@
 from agentic_chatbot import chatbot, get_all_thread
 from langchain_core.messages import HumanMessage, BaseMessage, AIMessage
 import streamlit as st
-import uuid
+import uuid, os
+import tempfile
+from combined_tools import ingest_rag_document 
 
 
 st.title("Agentic Chatbot With LangGraph") 
@@ -53,7 +55,25 @@ def load_conversations(thread_id):
 #  ==================Sidebar thread feature==========================
   
 #Adding Sidebar for conversation threads
-st.sidebar.title("My Conversations")  
+st.sidebar.title("My Conversations")
+
+# --- Add this PDF upload block ---
+st.sidebar.divider()
+uploaded_pdf = st.sidebar.file_uploader("Upload a PDF for RAG", type=["pdf"])
+
+if uploaded_pdf is not None:
+    if st.sidebar.button("Ingest PDF"):
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp_file:
+            tmp_file.write(uploaded_pdf.read())
+            tmp_path = tmp_file.name
+
+        with st.sidebar.status("Processing PDF..."):
+            ingest_rag_document(tmp_path)
+
+        os.remove(tmp_path)
+        st.sidebar.success("PDF ingested! You can now ask questions about it.")
+st.sidebar.divider()
+# --- end block ---
 
 if st.sidebar.button("New Chat"):
     reset_chat()
