@@ -85,8 +85,8 @@ jobs:
       - name: Login to Docker Hub
         uses: docker/login-action@v3
         with:
-          username: ${{ secrets.khushi201 }}
-          password: ${{ secrets.dckr_pat_XZb_ZaSaqmdaYI75RkrxEM_8-RM }}
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
 
 
       # Build Docker image
