@@ -1,9 +1,9 @@
-from agent.agentic_chatbot import chatbot, get_all_thread
+from src.agent.agentic_chatbot import chatbot, get_all_thread
 from langchain_core.messages import HumanMessage, BaseMessage, AIMessage
 import streamlit as st
 import uuid, os
 import tempfile
-from tools.combined_tools import ingest_rag_document 
+from src.tools.combined_tools import ingest_rag_document 
 
 
 st.title("Agentic Chatbot With LangGraph") 

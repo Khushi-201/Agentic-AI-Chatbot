@@ -4,23 +4,16 @@ from typing import TypedDict, Annotated
 from langchain_core.messages import BaseMessage, HumanMessage, AIMessage, SystemMessage
 from langchain_google_genai import ChatGoogleGenerativeAI
 from dotenv import load_dotenv
-from langgraph.checkpoint.memory import MemorySaver
-import sqlite3
-import uuid
+import sqlite3, uuid
 from langgraph.checkpoint.sqlite import SqliteSaver
 from langgraph.prebuilt import ToolNode, tools_condition
-from langchain_core.tools import tool
-from langchain_tavily import TavilySearch
-from langchain_community.document_loaders import PyPDFLoader
-from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_google_genai import GoogleGenerativeAIEmbeddings
-from langchain_community.vectorstores import FAISS
-from tools.combined_tools import llm_with_tools, tools
+from src.tools.combined_tools import llm_with_tools, tools
 from langgraph.graph.message import add_messages
 
 load_dotenv()  # Load environment variables from .env file
 
-llm = ChatGoogleGenerativeAI(model="gemini-3.6-flash")
+llm = ChatGoogleGenerativeAI(model="gemini-3.5-flash")
 
 #=========================Embedding for RAG=======================
 embeddings = GoogleGenerativeAIEmbeddings(model="gemini-embedding-001")
@@ -63,13 +56,12 @@ def chat_node(state: ChatState):
         "messages":[response]
     }
 
-
 # Nodes 2 - tool node
 tool_node = ToolNode(tools)
 conn = sqlite3.connect(database="chatbot.db", check_same_thread=False)
 checkpoint = SqliteSaver(conn)
 
-graph =StateGraph(ChatState)
+graph = StateGraph(ChatState)
 
 graph.add_node('chat_node', chat_node)
 graph.add_node('tools', tool_node)
@@ -79,7 +71,6 @@ graph.add_conditional_edges("chat_node",tools_condition)
 graph.add_edge('tools', 'chat_node')
 
 chatbot = graph.compile(checkpointer=checkpoint)
-
 
 # initial_state = {
 #     "messages": [HumanMessage(content="Hello! How are you?")]
@@ -103,5 +94,5 @@ if __name__ == "__main__":
             break
         config = {'configurable': {'thread_id': thread_id}}
         response = chatbot.invoke({"messages": [HumanMessage(content=user_message)]}, config=config)
-
-
+        
+        

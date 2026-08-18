@@ -219,3 +219,6 @@ __marimo__/
 
 # research files
 chatbot.ipynb
+.dockerignore
+.github/workflow/cicd.yaml
+Dockerfile

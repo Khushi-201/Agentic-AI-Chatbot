@@ -1,0 +1,152 @@
+name: Streamlit AWS CI/CD
+
+on:
+  push:
+    branches:
+      - main
+    paths-ignore:
+      - "README.md"
+
+  pull_request:
+    branches:
+      - main
+
+  workflow_dispatch:
+
+# Prevent two deployments from running at the same time
+concurrency:
+  group: agentic-chatbot-production
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+
+jobs:
+
+  # ============================================================
+  # CONTINUOUS INTEGRATION
+  # ============================================================
+
+  continuous-integration:
+
+    name: Continuous Integration
+
+    runs-on: ubuntu-latest
+
+    steps:
+
+      # Checkout source code
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+
+      # Setup Python
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+
+      # Install Python dependencies
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+
+      # Validate required application secrets
+      - name: Validate application secrets
+        env:
+          GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
+          TAVILY_API_KEY: ${{ secrets.TAVILY_API_KEY }}
+        run: |
+          if [ -z "$GOOGLE_API_KEY" ]; then
+            echo "GOOGLE_API_KEY is missing"
+            exit 1
+          fi
+
+          if [ -z "$TAVILY_API_KEY" ]; then
+            echo "TAVILY_API_KEY is missing"
+            exit 1
+          fi
+
+          echo "Application secrets are configured"
+
+
+      # Run tests
+      - name: Run tests
+        run: |
+          pytest
+
+
+      # Login to Docker Hub
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.khushi201 }}
+          password: ${{ secrets.dckr_pat_XZb_ZaSaqmdaYI75RkrxEM_8-RM }}
+
+
+      # Build Docker image
+      - name: Build Docker image
+        run: |
+          docker build \
+            -t ${{ secrets.DOCKER_USERNAME }}/langgraph-chatbot:${{ github.sha }} \
+            .
+
+
+      # Push the exact image that passed CI
+      - name: Push Docker image
+        run: |
+          docker push \
+            ${{ secrets.DOCKER_USERNAME }}/langgraph-chatbot:${{ github.sha }}
+
+
+  # ============================================================
+  # CONTINUOUS DEPLOYMENT
+  # ============================================================
+
+  continuous-deployment:
+
+    name: Continuous Deployment
+
+    needs: continuous-integration
+
+    # Deploy only pushes to main.
+    # Pull requests run CI but do not deploy.
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+
+    runs-on: ubuntu-latest
+
+    steps:
+
+      # Deploy the EXACT Docker image built and tested by CI
+      - name: Deploy to AWS EC2
+        uses: appleboy/ssh-action@v1.2.2
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USERNAME }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+
+          script: |
+
+            docker pull \
+              ${{ secrets.DOCKER_USERNAME }}/langgraph-chatbot:${{ github.sha }}
+
+            docker stop langgraph-chatbot || true
+            docker rm langgraph-chatbot || true
+
+            docker run -d \
+              --name langgraph-chatbot \
+              -p 8501:8501 \
+              --restart unless-stopped \
+              -e TAVILY_API_KEY="${{ secrets.TAVILY_API_KEY }}" \
+              -e GOOGLE_API_KEY="${{ secrets.GOOGLE_API_KEY }}" \
+              -e OPENWEATHER_API_KEY="${{ secrets.OPENWEATHER_API_KEY }}" \
+              -e LANGSMITH_TRACING="${{ secrets.LANGSMITH_TRACING }}" \
+              -e LANGSMITH_ENDPOINT="${{ secrets.LANGSMITH_ENDPOINT }}" \
+              -e LANGSMITH_API_KEY="${{ secrets.LANGSMITH_API_KEY }}" \
+              -e LANGSMITH_PROJECT="${{ secrets.LANGSMITH_PROJECT }}" \
+              ${{ secrets.DOCKER_USERNAME }}/langgraph-chatbot:${{ github.sha }}
