@@ -1,4 +1,3 @@
-
 from langgraph.graph import StateGraph, START, END
 from typing import TypedDict, Annotated
 from langchain_core.messages import BaseMessage, HumanMessage, AIMessage, SystemMessage
@@ -7,16 +6,12 @@ from dotenv import load_dotenv
 import sqlite3, uuid
 from langgraph.checkpoint.sqlite import SqliteSaver
 from langgraph.prebuilt import ToolNode, tools_condition
-from langchain_google_genai import GoogleGenerativeAIEmbeddings
 from src.tools.combined_tools import llm_with_tools, tools
 from langgraph.graph.message import add_messages
 
 load_dotenv()  # Load environment variables from .env file
 
 llm = ChatGoogleGenerativeAI(model="gemini-3.5-flash")
-
-#=========================Embedding for RAG=======================
-embeddings = GoogleGenerativeAIEmbeddings(model="gemini-embedding-001")
 
 class ChatState(TypedDict):
     messages : Annotated[list[BaseMessage], add_messages]
